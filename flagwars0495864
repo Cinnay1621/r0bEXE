@@ -1,0 +1,433 @@
+
+
+
+
+--NICHT NUTZEN! ZU DURCHEINANDER
+
+
+
+
+local player = game.Players.LocalPlayer
+
+function buildGround()
+    local ground = game.Workspace:FindFirstChild("r0bEXEground")
+    if ground then ground:Destroy() wait(.5) end
+    ground = Instance.new("Part")
+    ground.Position = player.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0)
+    ground.Size = Vector3.new(5000,1,5000)
+    ground.Anchored = true
+    ground.Name = "r0bEXEground"
+    ground.Parent = game.Workspace
+end
+
+-- GUI -------------------------------------------------------------------
+local player = game.Players.LocalPlayer
+
+local oldGui = player.PlayerGui:FindFirstChild("YB-Gui")
+if oldGui then oldGui:Destroy(); wait(1) end
+
+-- YB Hack Gui
+local gui = Instance.new("ScreenGui")
+gui.Name = "YB-Gui"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 1621
+gui.Parent = player.PlayerGui
+
+-- Gui Frame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 420)
+frame.AnchorPoint = Vector2.new(0, 0)
+frame.Position = UDim2.new(0, 10, 0, 10)
+frame.BackgroundColor3 = Color3.fromRGB(255,255,0)
+frame.BackgroundTransparency = .7
+frame.Parent = gui
+
+--Erstellt klassenähnlich einen Text
+local txtCount = 0
+function newtxt(name, color)
+	local txt = Instance.new("TextLabel")
+	txt.Name = name
+	txt.Text = name
+	txt.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+	if color then txt.BackgroundColor3 = Color3.fromRGB(color[1], color[2], color[3]) end
+	txt.Size = UDim2.new(.9, 0, .07, 0)
+	txt.AnchorPoint = Vector2.new(.5, 0)
+	txt.Position = UDim2.new(.5, 0, txtCount*.11, 10)
+	txt.TextYAlignment = "Center"
+	txt.Font = "Legacy"
+	txt.TextColor3 = Color3.fromRGB(255,80,0)
+	txt.TextStrokeTransparency = 0
+	txt.TextScaled = true
+	txt.Parent = frame
+	txtCount += 1
+	return txt
+end
+
+local r0bEXE = newtxt("r0bEXE", {50, 50, 0})
+
+local findTarget = newtxt("(E) FIND TARGET", {120, 180, 137})
+
+local toggleMode = newtxt("(T) TOGGLE MODE")
+local mode = newtxt("NEAREST ON THE SCREEN")
+
+local toggleClickAimbot = newtxt("(M) MOUSE CLICK AIM", {120, 140, 137})
+local clickAimbot = newtxt("OFF", {120, 140, 137})
+
+local toggleNadeStorm = newtxt("(K) FLAG FARM", {200, 140, 137})
+local nadeStorm = newtxt("OFF", {200, 140, 137})
+
+-- TIMEKEY ---------------------------------------------------------------
+local timeKey
+local P1 = {x=1602886320, y=178840.76767642}
+local P2 = {x=1602905126, y=178968.22965076}
+local velTable
+function getTimeKey()
+	if not points then
+		velTable = {
+			p1 = P1,
+			p2 = P2
+		}
+	else
+		velTable = points
+		if not velTable.p1 then velTable.p1 = P1 end
+		if not velTable.p2 then velTable.p2 = P2 end
+	end
+
+	local dx = velTable.p2.x - velTable.p1.x
+	local dy = velTable.p2.y - velTable.p1.y
+	local m = dy / dx
+	local b = velTable.p2.y - (m * velTable.p2.x)
+
+	local x = os.time()
+	local y = m * x + b
+
+	timeKey = y
+	return timeKey
+end
+
+-- FUNKTION --------------------------------------------------------------
+local player = game.Players.LocalPlayer
+local cam = game.Workspace.Camera
+local aim = false
+local state = true
+local killAll = false
+local headMode = false
+local mouseAimpot = false
+local camState = "nearest on screen"
+
+local guiFolder = Instance.new("Folder")
+guiFolder.Parent = player.PlayerGui
+
+local enemyColor = Color3.fromRGB(255, 0, 0)
+local camEnemy
+local camEnemys
+local lastHealth = {}
+local autofarm = false
+local fail = false
+
+function getHead(model, hrp)
+    local rbHead = model.Head
+    local rbVel = hrp.Velocity
+    local testVec = rbVel
+    local potHead
+    for i=0, 50, 1 do
+        local head = model:FindFirstChild("Head" .. tostring(i))
+        if head then
+            local headVec = (head.Position - rbHead.Position) + rbVel
+            if headVec.Magnitude > testVec.Magnitude then
+               potHead = head
+            end
+        end
+       
+    end
+    if potHead then return potHead end
+end
+
+function calcOffset(hGui, model, hrp, uTorso)
+    local offset = Vector3.new(0, 0, 0)
+    if headMode then
+        local head = getHead(model, hrp)
+        if head then
+            offset = head.Position - hrp.Position
+    	    hGui.StudsOffset = offset --Vector3.new(0, 1.9, 0)
+    	    if offset.Magnitude > 5 then hGui.StudsOffset = Vector3.new(0, 1.9, 0) end
+    	else
+    	    hGui.StudsOffset = Vector3.new(0, 1.9, 0)
+    	end
+	else
+	    offset = uTorso.Position - hrp.Position
+	    if offset.Magnitude > 5 then offset = Vector3.new(0, .5, 0) end
+	    hGui.StudsOffset = offset --Vector3.new(0, .5, 0)
+    end
+    return offset
+end
+
+function showEnemys()
+    if guiFolder then
+        guiFolder:Destroy()
+        guiFolder = Instance.new("Folder")
+        guiFolder.Parent = player.PlayerGui
+    end
+    
+    if state then
+        camEnemys = {}
+        for i, pl in ipairs(game.Players:GetChildren()) do
+		    local model = game.Workspace:FindFirstChild(pl.Name)
+		    local player = game.Players.LocalPlayer
+		    if model.Name == player.Name then continue end
+		    if model.UpperTorso.Color == player.Character.UpperTorso.Color then continue end
+		    local hrp = model:FindFirstChild("UpperTorso")
+		    --if not uTorso then continue end
+		    
+		    if not model:FindFirstChild("Humanoid") then
+		        if hrp == camEnemy then
+		            camEnemy = false
+		            aim = false
+		        end
+		        continue
+		    end 
+		    
+		    local health = model.Humanoid.Health
+		    if lastHealth[model.Name] == 0 then
+		        lastHealth[model.Name] = health
+		        continue
+		    end
+		    lastHealth[model.Name] = health
+		    --local pGui = uTorso.g
+		    
+		    --if pGui.Enabled then continue end
+		    
+			local headGui = Instance.new("BillboardGui")
+			headGui.Size = UDim2.new(1.2, 0, 1.2, 0)
+			headGui.AlwaysOnTop = true
+			headGui.Active = true
+			headGui.Adornee = hrp
+			headGui.Parent = guiFolder
+
+			local headButton = Instance.new("TextButton")
+			headButton.Size = UDim2.new(1, 0, 1, 0)
+			headButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+			headButton.TextStrokeTransparency = 0
+			headButton.TextScaled = true
+			headButton.Text = "r0bEXE"
+			local vec = hrp.Position - player.Character.HumanoidRootPart.Position
+			local s = vec.Magnitude
+			local maxS = 100
+			local maxGreen = 200
+			local green = maxGreen + math.floor((((s - maxS) / maxS) * maxGreen))
+			headButton.BackgroundColor3 = Color3.fromRGB(255, green, 0)
+			
+			headButton.Parent = headGui
+			
+			local modelOffset = Vector3.new(0,1,0)--calcOffset(headGui, model, hrp, uTorso)
+			
+			table.insert(camEnemys, {name = model.Name, offset = modelOffset})
+		end
+    end
+end
+
+function syncCam()
+    if aim then
+        if camEnemy and camEnemy.Parent:FindFirstChild("Humanoid") then
+            if player.Character.Humanoid.Health > 0 then
+                local pos = camEnemy.Position + camOffset
+        		cam.CFrame = CFrame.new(cam.CFrame.Position, pos)
+        	end
+        end
+    end
+end
+
+function getEnemy()
+    local s = 999999999999999999
+    if camState == "nearest in world" then
+        for i, p in ipairs(camEnemys) do
+            local pHrp = game.Workspace:FindFirstChild(p.name).HumanoidRootPart
+            local vec = pHrp.Position - player.Character.HumanoidRootPart.Position
+            if vec.Magnitude < s then
+               s = vec.Magnitude
+               camtoEnemy = pHrp
+               camtoOffset = p.offset
+            end
+        end
+        
+    elseif camState == "nearest on screen" then
+        for i, p in ipairs(camEnemys) do
+            local pHrp = game.Workspace:FindFirstChild(p.name).HumanoidRootPart
+            local gameSize = cam.ViewportSize
+            local vec, onScreen = cam:WorldToScreenPoint(pHrp.Position)
+            local vec2 = Vector2.new(vec.x, vec.y) - gameSize/2
+            if vec2.Magnitude < s and onScreen then
+               s = vec2.Magnitude
+               camtoEnemy = pHrp
+               camtoOffset = p.offset
+            end
+        end
+    end
+    if camtoEnemy then
+        print(camtoEnemy.Parent.Name)
+        camEnemy = camtoEnemy
+        if camtoOffset.Magnitude < 5 then
+            camOffset = camtoOffset
+        else
+            if headMode then
+                camOffset = Vector3.new(0, 1.9, 0)
+            else
+                camOffset = Vector3.new(0, .5, 0)
+            end
+        end
+    end
+end
+
+local userInputService = game:GetService("UserInputService")
+userInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.E then
+        if player.Character.Humanoid.Health > 0 then
+            if aim then
+                aim = false
+            else
+                getEnemy()
+                aim = true
+            end
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.T then
+        if camState == "nearest on screen" then
+            camState = "nearest in world"
+            mode.Text = "NEAREST IN THE WORLD"
+        else
+            camState = "nearest on screen"
+            mode.Text = "NEAREST ON THE SCREEN"
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.M then
+        if mouseAimpot then
+            mouseAimpot = false
+            clickAimbot.Text = "OFF"
+        else
+            mouseAimpot = true
+            clickAimbot.Text = "ON"
+        end
+    
+    elseif input.KeyCode == Enum.KeyCode.K then
+        if not autofarm then
+            autofarm = true
+            nadeStorm.Text = "ON"
+            player.Character.Humanoid.Health = 0
+        else
+            autofarm = false
+            fail = true
+            nadeStorm.Text = "TURNING OFF ..."
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.G then
+        buildGround()
+        
+    elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if mouseAimpot then getEnemy(); aim = true end
+    end
+end)
+
+userInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if mouseAimpot then aim = false end
+    end
+end)
+
+local runService = game:GetService("RunService")
+runService:BindToRenderStep("Camera", Enum.RenderPriority.Camera.Value, syncCam)
+runService:BindToRenderStep("Camera", Enum.RenderPriority.Camera.Value, showEnemys)
+
+local flagsFolder = game.Workspace.Flags
+local vel = Instance.new("BodyVelocity")
+vel.MaxForce = Vector3.new(99999,99999,99999)
+function run()
+    to("z", flagsFolder.BlueFlag.Pad.Position.z, 18)
+    vel.Velocity = Vector3.new(0, 20, 0) wait(.5) vel.Velocity = Vector3.new(0, -16, 0) wait(.5) 
+    to("z", flagsFolder.RedFlag.Pad.Position.z, 18)
+    vel.Velocity = Vector3.new(0, 20, 0) wait(.5) vel.Velocity = Vector3.new(0, -16, 0) wait(.5) 
+end
+
+function goAutofarm()
+    if autofarm == false then return end
+    --Auto Farm
+    vel.Parent = player.Character.HumanoidRootPart
+    local player = game.Players.LocalPlayer
+    local hrp = player.Character.HumanoidRootPart
+    
+    local wallFolder = game.Workspace:FindFirstChild("r0bEXEground")
+    if wallFolder then return end
+    local wallFolder = Instance.new("Folder")
+    wallFolder.Name = "r0bEXEground"
+    wallFolder.Parent = game.Workspace
+    
+    function to(cord, value, speed)
+        if fail == false then
+            local newVel = {
+               x = 0,
+               y = 0,
+               z = 0
+            }
+            newVel[cord] = speed
+            vel.Velocity = Vector3.new(newVel.x, newVel.y, newVel.z)
+            
+            local loss = math.abs(hrp.Position[cord] - value)
+            local tol = speed/100*2
+            local t = os.time()
+            local oldPos = player.Character.HumanoidRootPart.Position
+            while (loss > tol) do
+                if os.time() - t > 1 then dVec = oldPos-player.Character.HumanoidRootPart.Position if dVec.Magnitude <= 1 then player.Character.Humanoid.Health = 0 end end
+                if not autofarm then return end
+                print("loss: ", tostring(loss))
+                print("tolerance: ", tostring(tol))
+                wait()
+                if player.Character.Humanoid.Health == 0 then fail = true return end
+                local newLoss = math.abs(hrp.Position[cord] - value)
+                print("new loss: ", tostring(newLoss))
+                print("velocity: ", tostring(vel.Velocity))
+                if newLoss >= loss then
+                    vel.Velocity = -vel.Velocity
+                end
+                loss = newLoss
+            end
+        end
+    end
+    
+    ground = Instance.new("Part")
+    ground.TopSurface = "Smooth"
+    ground.BottomSurface = "Smooth"
+    ground.Color = Color3.fromRGB(0,0,0)
+    ground.Position = flagsFolder.BlueFlag.Pad.Position - Vector3.new(0, 8, 0)
+    ground.Size = Vector3.new(5000,1,5000)
+    ground.Anchored = true
+    ground.Parent = wallFolder
+    
+    local dirtFolder = game.Workspace:FindFirstChild("DirtFolder")
+    if dirtFolder then dirtFolder.Parent = game.ReplicatedStorage end
+    local mapFolder = game.Workspace:FindFirstChild("Map")
+    if mapFolder then mapFolder.Parent = game.ReplicatedStorage end
+    to("x", flagsFolder.BlueFlag.Pad.Position.x, 15)
+    vel.Velocity = Vector3.new(0,-15,0)
+    wait(2)
+    
+    top = Instance.new("Part")
+    top.TopSurface = "Smooth"
+    top.BottomSurface = "Smooth"
+    top.Color = Color3.fromRGB(0,0,0)
+    top.Position = flagsFolder.BlueFlag.Pad.Position - Vector3.new(0, 2, 0)
+    top.Size = Vector3.new(5000,1,5000)
+    top.Anchored = true
+    top.Parent = wallFolder
+    while not fail do run() end
+    fail = false
+    if vel then vel:Destroy() vel = Instance.new("BodyVelocity") vel.MaxForce = Vector3.new(99999,99999,99999) end
+    wallFolder:Destroy()
+    dirtFolder.Parent = game.Workspace
+    mapFolder.Parent = game.Workspace
+    if not autofarm then player.Character.Humanoid.Health = 0 nadeStorm.Text = "OFF" else wait(10) end
+end
+runService:BindToRenderStep("Camera", Enum.RenderPriority.Camera.Value, goAutofarm)
+
+while true do
+    wait()
+    boom()
+end
