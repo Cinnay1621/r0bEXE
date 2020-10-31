@@ -1,0 +1,330 @@
+-- GUI -------------------------------------------------------------------
+local player = game.Players.LocalPlayer
+
+local oldGui = player.PlayerGui:FindFirstChild("YB-Gui")
+if oldGui then oldGui:Destroy(); wait(1) end
+
+-- YB Hack Gui
+local gui = Instance.new("ScreenGui")
+gui.Name = "YB-Gui"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 1621
+gui.Parent = player.PlayerGui
+
+-- Gui Frame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 300)
+frame.AnchorPoint = Vector2.new(0, .5)
+frame.Position = UDim2.new(0, 10, .5, 0)
+frame.BackgroundColor3 = Color3.fromRGB(50,0,0)
+frame.BackgroundTransparency = .2
+frame.Parent = gui
+
+--Erstellt klassenähnlich einen Text
+local txtCount = 0
+function newtxt(name, color)
+	local txt = Instance.new("TextLabel")
+	txt.Name = name
+	txt.Text = name
+	txt.BackgroundColor3 = Color3.fromRGB(0, 50, 0)
+	if color then txt.BackgroundColor3 = Color3.fromRGB(color[1], color[2], color[3]) end
+	txt.Size = UDim2.new(.9, 0, .1, 0)
+	txt.AnchorPoint = Vector2.new(.5, 0)
+	txt.Position = UDim2.new(.5, 0, txtCount*.138, 10)
+	txt.TextYAlignment = "Center"
+	txt.Font = "Legacy"
+	txt.TextColor3 = Color3.fromRGB(255,50,50)
+	txt.TextStrokeTransparency = 0
+	txt.TextScaled = true
+	txt.Parent = frame
+	txtCount += 1
+	return txt
+end
+
+local r0bEXE = newtxt("r0bEXE", {0, 0, 0})
+
+local toggleMode = newtxt("(T) TOGGLE MODE")
+local mode = newtxt("NEAREST ON THE SCREEN")
+
+local toggleClickAimbot = newtxt("(M) MOUSE CLICK AIM", {20, 40, 37})
+local clickAimbot = newtxt("OFF", {20, 40, 37})
+
+local toggleNadeStorm = newtxt("(K) NADE STORM (kill all)", {100, 40, 37})
+local nadeStorm = newtxt("OFF", {100, 40, 37})
+
+-- TIMEKEY ---------------------------------------------------------------
+local timeKey
+local P1 = {x=1602886320, y=178840.76767642}
+local P2 = {x=1603840008, y=180963.60726352}
+local velTable
+function getTimeKey()
+	if not points then
+		velTable = {
+			p1 = P1,
+			p2 = P2
+		}
+	else
+		velTable = points
+		if not velTable.p1 then velTable.p1 = P1 end
+		if not velTable.p2 then velTable.p2 = P2 end
+	end
+
+	local dx = velTable.p2.x - velTable.p1.x
+	local dy = velTable.p2.y - velTable.p1.y
+	local m = dy / dx
+	local b = velTable.p2.y - (m * velTable.p2.x)
+
+	local x = os.time()
+	local y = m * x + b
+
+	timeKey = y
+	return timeKey
+end
+
+-- FUNKTION --------------------------------------------------------------
+local player = game.Players.LocalPlayer
+local cam = game.Workspace.Camera
+local aim = false
+local state = true
+local killAll = false
+local headMode = false
+local mouseAimpot = false
+local camState = "nearest on screen"
+
+local guiFolder = Instance.new("Folder")
+guiFolder.Parent = player.PlayerGui
+
+local enemyColor = Color3.fromRGB(255, 0, 0)
+local camEnemy
+local camEnemys
+local lastHealth = {}
+
+function getHead(model, hrp)
+    local rbHead = model.Head
+    local rbVel = hrp.Velocity
+    local testVec = rbVel
+    local potHead
+    for i=0, 50, 1 do
+        local head = model:FindFirstChild("Head" .. tostring(i))
+        if head then
+            local headVec = (head.Position - rbHead.Position) + rbVel
+            if headVec.Magnitude > testVec.Magnitude then
+               potHead = head
+            end
+        end
+       
+    end
+    if potHead then return potHead end
+end
+
+function calcOffset(hGui, model, hrp, uTorso)
+    local offset = Vector3.new(0, 0, 0)
+    if headMode then
+        local head = getHead(model, hrp)
+        if head then
+            offset = head.Position - hrp.Position
+    	    hGui.StudsOffset = offset --Vector3.new(0, 1.9, 0)
+    	    if offset.Magnitude > 5 then hGui.StudsOffset = Vector3.new(0, 1.9, 0) end
+    	else
+    	    hGui.StudsOffset = Vector3.new(0, 1.9, 0)
+    	end
+	else
+	    offset = uTorso.Position - hrp.Position
+	    if offset.Magnitude > 5 then offset = Vector3.new(0, .5, 0) end
+	    hGui.StudsOffset = offset --Vector3.new(0, .5, 0)
+    end
+    return offset
+end
+
+function showEnemys()
+    if guiFolder then
+        guiFolder:Destroy()
+        guiFolder = Instance.new("Folder")
+        guiFolder.Parent = player.PlayerGui
+    end
+    
+    if state then
+        camEnemys = {}
+		for i, model in ipairs(game.Workspace.ClientZambies:GetChildren()) do
+		    if not model:isA("Model") then continue end
+		    if model.Name == player.Name then continue end
+		    local uTorso = model:FindFirstChild("Head")
+		    local hrp = model:FindFirstChild("Head")
+		    if not uTorso then continue end
+		    
+		    if not camEnemy then aim = false end
+		    
+			local headGui = Instance.new("BillboardGui")
+			headGui.Size = UDim2.new(1, 0, 1, 0)
+			headGui.AlwaysOnTop = true
+			headGui.Active = true
+			headGui.Adornee = hrp
+			headGui.Parent = guiFolder
+
+			local headButton = Instance.new("TextButton")
+			headButton.Size = UDim2.new(1, 0, 1, 0)
+			headButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+			headButton.TextStrokeTransparency = 0
+			headButton.TextScaled = true
+			headButton.Transparency = .3
+			headButton.Text = "r0bEXE"
+			local vec = hrp.Position - player.Character.HumanoidRootPart.Position
+			local s = vec.Magnitude
+			local maxS = 100
+			local maxGreen = 200
+			local green = maxGreen + math.floor((((s - maxS) / maxS) * maxGreen))
+			headButton.BackgroundColor3 = Color3.fromRGB(255, green, 0)
+			
+			headButton.Parent = headGui
+			
+			local modelOffset = Vector3.new(0,0,0)
+			
+			table.insert(camEnemys, {name = model.Name, offset = modelOffset})
+		end
+    end
+end
+
+function syncCam()
+    if aim then
+        if camEnemy and player.Character.Humanoid.Health > 0 then
+            local pos = camEnemy.Position + camOffset
+    		cam.CFrame = CFrame.new(cam.CFrame.Position, pos)
+        end
+    end
+end
+
+function getEnemy()
+    local s = 999999999999999999
+    if camState == "nearest in world" then
+        for i, p in ipairs(camEnemys) do
+            local pHrp = game.Workspace.ClientZambies:FindFirstChild(p.name).Head
+            local vec = pHrp.Position - player.Character.HumanoidRootPart.Position
+            if vec.Magnitude < s then
+               s = vec.Magnitude
+               camtoEnemy = pHrp
+               camtoOffset = p.offset
+            end
+        end
+        
+    elseif camState == "nearest on screen" then
+        for i, p in ipairs(camEnemys) do
+            local pHrp = game.Workspace.ClientZambies:FindFirstChild(p.name).Head
+            local gameSize = cam.ViewportSize
+            local vec, onScreen = cam:WorldToScreenPoint(pHrp.Position)
+            local vec2 = Vector2.new(vec.x, vec.y) - gameSize/2
+            if vec2.Magnitude < s and onScreen then
+               s = vec2.Magnitude
+               camtoEnemy = pHrp
+               camtoOffset = p.offset
+            end
+        end
+    end
+    if camtoEnemy then
+        print(camtoEnemy.Parent.Name)
+        camEnemy = camtoEnemy
+        if camtoOffset.Magnitude < 5 then
+            camOffset = camtoOffset
+        else
+            camOffset = Vector3.new(0, .5, 0)
+        end
+    end
+end
+
+local userInputService = game:GetService("UserInputService")
+userInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.F and false then
+        if player.Character.Humanoid.Health > 0 then
+            if aim then
+                aim = false
+            else
+                getEnemy()
+                aim = true
+            end
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.T then
+        if camState == "nearest on screen" then
+            camState = "nearest in world"
+            mode.Text = "NEAREST IN THE WORLD"
+        else
+            camState = "nearest on screen"
+            mode.Text = "NEAREST ON THE SCREEN"
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.M then
+        if mouseAimpot then
+            mouseAimpot = false
+            clickAimbot.Text = "OFF"
+        else
+            mouseAimpot = true
+            clickAimbot.Text = "ON"
+        end
+    
+    elseif input.KeyCode == Enum.KeyCode.H and false then
+        if headMode then
+            headMode = false
+            headModeTxt.Text = "(H) CHEST MODE (better)"
+        else
+            headMode = true
+            headModeTxt.Text = "(H) HEAD MODE"
+        end
+    
+    elseif input.KeyCode == Enum.KeyCode.K then
+        if killAll then
+            killAll = false
+            nadeStorm.Text = "OFF"
+        else
+            killAll = true
+            nadeStorm.Text = "ON"
+        end
+        
+    elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if mouseAimpot then getEnemy(); aim = true end
+    end
+end)
+
+userInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if mouseAimpot then aim = false end
+    end
+end)
+
+-- Nade Event Args
+local arg2 = "3.5"
+local arg4 = "-v0.1,-0.2,0.1"
+local arg5 = "Frag"
+local arg6 = 0.02
+function getNadeArgs(pPos, tk)
+	local arg1 = tk
+	local arg3 = "-f".. tostring(pPos.x+2) ..",".. tostring(pPos.y) ..",".. tostring(pPos.z) ..":0.021,0.321,0.721Z-10"
+	return arg1, arg2, arg3, arg4, arg5, arg6
+end
+
+-- Kill All
+function boom()
+    if not killAll then return end
+    getTimeKey()
+    local lagCounter = 0
+    for tk = timeKey-5, timeKey+10, 0.05 do
+        for i, p in ipairs(camEnemys) do
+            local pChar = game.Workspace.ClientZambies:FindFirstChild(p.name)
+            if pChar then
+                local pHrp = pChar:FindFirstChild("UpperTorso")
+                if pHrp then
+                    game.ReplicatedStorage.Events.Grenade:FireServer(getNadeArgs(pHrp.Position, tk))
+                end
+            end
+        end
+        if lagCounter % 5 == 0 then wait() end
+    end
+    print("YB - " .. timeKey)
+end
+
+local runService = game:GetService("RunService")
+runService:BindToRenderStep("Camera", Enum.RenderPriority.Camera.Value, syncCam)
+runService:BindToRenderStep("Camera", Enum.RenderPriority.Camera.Value, showEnemys)
+
+while true do
+    wait()
+    boom()
+end
